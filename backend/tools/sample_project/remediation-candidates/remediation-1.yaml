@@ -1,0 +1,13 @@
+candidate_id: remediation-1
+source_decision_id: SCAN-remediation-1
+trigger: review-decayed
+pattern: timeline-md-1
+corrective: review-decayed
+level: soft
+severity: medium
+priority: medium
+auto_approve_recommended: false
+evidence_count: 1
+metadata:
+  origin: lifecycle-scan
+status: pending

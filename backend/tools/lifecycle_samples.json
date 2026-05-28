@@ -1,0 +1,29 @@
+[
+  {
+    "id": "mem-decay-1",
+    "lifecycle": {
+      "state": "pending",
+      "captured_at": "2026-05-21T00:00:00+00:00",
+      "updated_at": "2026-05-21T00:00:00+00:00",
+      "decay_score": 1.2
+    }
+  },
+  {
+    "id": "mem-archive-1",
+    "lifecycle": {
+      "state": "decayed",
+      "captured_at": "2026-05-01T00:00:00+00:00",
+      "updated_at": "2026-05-01T00:00:00+00:00",
+      "decay_score": 1.5
+    }
+  },
+  {
+    "id": "mem-keep-1",
+    "lifecycle": {
+      "state": "verified",
+      "captured_at": "2026-05-21T00:00:00+00:00",
+      "updated_at": "2026-05-21T00:00:00+00:00",
+      "decay_score": 0.2
+    }
+  }
+]

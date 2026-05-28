@@ -1,0 +1,8 @@
+facts:
+  - id: fact-md-1
+    fact: Scanner can parse curated facts
+    lifecycle:
+      state: verified
+      captured_at: 2026-05-21T00:00:00+00:00
+      updated_at: 2026-05-21T00:00:00+00:00
+      decay_score: 0.1

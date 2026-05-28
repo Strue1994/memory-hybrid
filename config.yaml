@@ -1,0 +1,106 @@
+# Memory System Hybrid — Configuration
+# Copy to project root as memory-config.yaml and adjust
+
+# Preset (minimal | knowledge-worker | social-agent | full)
+preset: "knowledge-worker"
+
+# Backend URLs (leave empty to use file-only mode)
+backend:
+  api_url: ""                          # e.g. "http://localhost:8000"
+  qdrant_url: ""                       # e.g. "http://localhost:6333"
+  neo4j_uri: ""                        # e.g. "bolt://localhost:7687"
+  neo4j_user: "neo4j"
+  neo4j_password: "memory123456"
+
+# Layers to load (overridden by preset)
+active_layers:
+  - L0  # behavior hardening
+  - L1  # session continuity
+  - L3  # temporal memory
+  - L4  # fact curation
+  - L6  # decision audit
+
+# Behavior hardening (L0)
+hardening:
+  rules_file: "memory-hybrid/hardening/rules.yaml"
+  strikes_file: "memory-hybrid/hardening/strikes.log"
+  candidate_dir: "memory-hybrid/hardening/candidates"
+  review_log_file: "memory-hybrid/hardening/review-log.yaml"
+  history_dir: "memory-hybrid/hardening/history"
+
+lifecycle:
+  default_state_by_layer:
+    L3: captured
+    L4: pending
+    L5: curated
+    L6: verified
+  decay_threshold: 1.0
+  archive_after_days: 7
+  scan_roots:
+    - "memory-hybrid/hardening/candidates"
+    - ".opencode/skills/memory-hybrid/backend/tools/sample_memory"
+    - ".opencode/skills/memory-hybrid/backend/tools/sample_project"
+  prefer_project_root: true
+  remediation_dir: "memory-hybrid/remediation-candidates"
+  auto_approve_severity_threshold: high
+
+# External API bridge (L5)
+digital_self:
+  external_profile_url: ""
+  external_goal_sync_url: ""
+  external_reflection_url: ""
+  sync_interval_hours: 24
+
+# Memory Router
+router:
+  default_task_mode: general
+  layer_weights:
+    L2: 0.8
+    L3: 1.0
+    L4: 1.2
+    L5: 0.6
+    L6: 0.7
+  task_mode_weights:
+    general: {L2: 0.8, L3: 1.0, L4: 1.2, L5: 0.6, L6: 0.7}
+    debug: {L2: 0.5, L3: 1.1, L4: 0.9, L5: 0.4, L6: 1.4}
+    implement: {L2: 0.4, L3: 1.0, L4: 1.4, L5: 0.8, L6: 0.7}
+    plan: {L2: 0.5, L3: 0.8, L4: 1.0, L5: 1.3, L6: 1.1}
+    social: {L2: 1.4, L3: 1.0, L4: 0.7, L5: 0.8, L6: 0.9}
+  recency_bonus:
+    hours_24: 0.3
+    hours_168: 0.1
+
+promotion:
+  l6_to_l0:
+    enabled: true
+    min_evidence_count: 1
+    default_level: soft
+    review_dir: "memory-hybrid/hardening/candidates"
+
+benchmark:
+  script: ".opencode/skills/memory-hybrid/backend/tools/benchmark_memory.py"
+  lifecycle_sample: ".opencode/skills/memory-hybrid/backend/tools/lifecycle_samples.json"
+  cases_file: ".opencode/skills/memory-hybrid/backend/tools/benchmark_cases.json"
+  report_dir: ".opencode/skills/memory-hybrid/backend/tools/reports"
+  trend_summary: true
+  trend_recent_window: 3
+  regression_detection: true
+  alert_thresholds:
+    route_hit_min: 0.8
+    usefulness_min: 0.8
+    false_helpfulness_max: 0.2
+  markdown_summary: true
+  markdown_interpretation: true
+  markdown_history_table: true
+  retention_limit: 10
+  cleanup_stats: true
+  stability_summary: true
+  metrics:
+    - route_hit_rate
+    - usefulness_score
+    - false_helpfulness_score
+    - regressions
+
+timeline:
+  default_export_format: html
+  export_dir: "memory-hybrid/exports/timeline"

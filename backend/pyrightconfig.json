@@ -1,0 +1,26 @@
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "executionEnvironments": [
+    {
+      "root": "api",
+      "extraPaths": [
+        ".venv/Lib/site-packages"
+      ]
+    }
+  ],
+  "typeCheckingMode": "basic",
+  "reportMissingImports": true,
+  "reportUnknownParameterType": false,
+  "reportUnknownVariableType": false,
+  "reportUnknownArgumentType": false,
+  "reportUnknownMemberType": false,
+  "reportUnknownLambdaType": false,
+  "reportUntypedFunctionDecorator": false,
+  "reportUntypedBaseClass": false,
+  "reportCallInDefaultInitializer": false,
+  "reportExplicitAny": false,
+  "include": [
+    "api"
+  ]
+}

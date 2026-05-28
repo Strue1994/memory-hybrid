@@ -1,0 +1,25 @@
+events:
+- candidate_id: 51a387731ba504f2
+  action: approved
+  timestamp: '2026-05-21T04:49:51.668440+00:00'
+- candidate_id: 51a387731ba504f2
+  action: approve-noop
+  timestamp: '2026-05-21T04:49:51.676664+00:00'
+- candidate_id: 51a387731ba504f2
+  action: approve-noop
+  timestamp: '2026-05-21T05:06:20.145479+00:00'
+- candidate_id: 8d61e28c4c085e8d
+  action: approved
+  timestamp: '2026-05-21T05:37:09.750291+00:00'
+- candidate_id: remediation-1
+  action: approved
+  timestamp: '2026-05-21T07:00:55.752343+00:00'
+- candidate_id: HARDEN-remediation-1
+  action: disabled
+  timestamp: '2026-05-21T07:26:30.980261+00:00'
+- candidate_id: HARDEN-remediation-1
+  action: enabled
+  timestamp: '2026-05-21T07:26:30.993242+00:00'
+- candidate_id: HARDEN-remediation-1
+  action: disabled
+  timestamp: '2026-05-21T07:53:05.010866+00:00'

@@ -1,0 +1,13 @@
+candidate_id: remediation-2
+source_decision_id: SCAN-remediation-2
+trigger: archive-migration
+pattern: goal-md-1
+corrective: archive-migration
+level: soft
+severity: high
+priority: high
+auto_approve_recommended: true
+evidence_count: 1
+metadata:
+  origin: lifecycle-scan
+status: pending

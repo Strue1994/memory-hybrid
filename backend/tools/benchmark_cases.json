@@ -1,0 +1,53 @@
+[
+  {
+    "name": "debug_prioritizes_l6",
+    "kind": "route",
+    "query": "why this bug happened again",
+    "task_mode": "debug",
+    "expected_first": "L6",
+    "useful_layers": ["L6", "L3"],
+    "misleading_layers": ["L5"]
+  },
+  {
+    "name": "implement_prioritizes_l4",
+    "kind": "route",
+    "query": "how to implement this API",
+    "task_mode": "implement",
+    "expected_first": "L4",
+    "useful_layers": ["L4", "L3"],
+    "misleading_layers": ["L2"]
+  },
+  {
+    "name": "plan_prioritizes_l5",
+    "kind": "route",
+    "query": "what is the right plan for this long term goal",
+    "task_mode": "plan",
+    "expected_first": "L5",
+    "useful_layers": ["L5", "L6"],
+    "misleading_layers": ["L2"]
+  },
+  {
+    "name": "social_prioritizes_l2",
+    "kind": "route",
+    "query": "who should collaborate on this task",
+    "task_mode": "social",
+    "expected_first": "L2",
+    "useful_layers": ["L2", "L3"],
+    "misleading_layers": ["L5"]
+  },
+  {
+    "name": "lifecycle_decays",
+    "kind": "lifecycle",
+    "source_layer": "L4",
+    "initial_state": "pending",
+    "decay_delta": 1.1,
+    "expected_state": "decayed"
+  },
+  {
+    "name": "promotion_is_deterministic",
+    "kind": "promotion",
+    "decision_id": "DEC-7",
+    "content": "change code before root cause",
+    "pattern": "change code before root cause"
+  }
+]

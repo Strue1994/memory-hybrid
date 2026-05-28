@@ -1,0 +1,13 @@
+candidate_id: 8d61e28c4c085e8d
+source_decision_id: DEC-ROLLBACK-1
+trigger: repeated-inspection-pattern
+pattern: always inspect before patching
+corrective: inspect root cause before mutation
+level: soft
+evidence_count: 2
+metadata:
+  trigger: repeated-inspection-pattern
+  pattern: always inspect before patching
+  corrective: inspect root cause before mutation
+  evidence_count: 2
+status: approved

@@ -1,0 +1,8 @@
+goals:
+  - id: goal-archive-1
+    title: old goal
+    lifecycle:
+      state: decayed
+      captured_at: 2026-05-01T00:00:00+00:00
+      updated_at: 2026-05-01T00:00:00+00:00
+      decay_score: 1.8

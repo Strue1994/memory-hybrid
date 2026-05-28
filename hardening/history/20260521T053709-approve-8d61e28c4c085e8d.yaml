@@ -1,0 +1,8 @@
+rules:
+- id: HARDEN-51a387731ba504f2
+  trigger: repeated-debug-mistake
+  pattern: change code before root cause
+  corrective: do root cause first
+  level: soft
+  source_decision_id: DEC-99
+  evidence_count: 3
