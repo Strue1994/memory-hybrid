@@ -54,7 +54,10 @@ class EmbeddingBackend:
             from sentence_transformers import SentenceTransformer
 
             self._model = SentenceTransformer(self._http_model)
-            dim = self._model.get_sentence_embedding_dimension()
+            try:
+                dim = self._model.get_embedding_dimension()
+            except AttributeError:
+                dim = self._model.get_sentence_embedding_dimension()
             if dim:
                 self._dimension = dim
             logger.info("Loaded local embedding model: %s (dim=%d)", self._http_model, self._dimension)
