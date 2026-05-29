@@ -1,29 +1,46 @@
 """MCP Server for memory-hybrid system.
 
 Provides Model Context Protocol tools for agent integration.
-Works offline by reading the memory root directly (filesystem-based).
+Uses SQLite (sqlite-vec + FTS5 + graph CTE) as primary store.
 """
+
+from __future__ import annotations
 
 import json
 import os
-import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from storage.sqlite_store import get_store
+from storage.file_mirror import FileMirror
+
 # ── Configuration ────────────────────────────────────────────────
 
-_MEMORY_ROOT_ENV = os.environ.get("MEMORY_HYBRID_ROOT") or os.environ.get("MEMORY_ROOT")
-_MEMORY_ROOT_DEFAULT = Path(__file__).resolve().parent.parent / "memory-hybrid"
-MEMORY_ROOT = Path(_MEMORY_ROOT_ENV) if _MEMORY_ROOT_ENV else _MEMORY_ROOT_DEFAULT
 BACKEND_URL = os.environ.get("BACKEND_URL", "")  # optional HTTP backend
+DB_PATH = os.environ.get("MEMORY_DB_PATH", "")   # optional custom DB path
+
+# Lazy-init store & mirror
+_store = None
+_mirror = FileMirror()
+
+
+def _store_singleton():
+    global _store
+    if _store is None:
+        _store = get_store(DB_PATH if DB_PATH else None)
+    return _store
 
 
 # ── MCP Server ───────────────────────────────────────────────────
 
-mcp = FastMCP("memory-hybrid", instructions="Memory system with temporal + fact + hardening layers.")
+mcp = FastMCP(
+    "memory-hybrid",
+    instructions="Offline-first memory system with SQLite (vector + FTS5 + graph). "
+                "L3=temporal, L4=facts, L5=goals, L6=decisions, L2=relationships, L0=rules.",
+)
 
 
 # ── Helpers ──────────────────────────────────────────────────────
@@ -33,29 +50,15 @@ def _json(val: Any, **kw: Any) -> str:
     return json.dumps(val, ensure_ascii=False, default=str, **kw)
 
 
-def _read_file(path: Path) -> str:
-    try:
-        return path.read_text(encoding="utf-8", errors="replace")
-    except Exception:
-        return ""
-
-
-def _walk_files(root: Path, pattern: str = "*") -> list[Path]:
-    if not root.exists():
-        return []
-    return sorted(root.rglob(pattern))
-
-
-def _count_files(root: Path, pattern: str = "*") -> int:
-    return len(_walk_files(root, pattern))
-
-
 # ── Tools ────────────────────────────────────────────────────────
 
 
 @mcp.tool()
 def recall(query: str, layers: str = "L3,L4", top_k: int = 5) -> str:
     """Recall memory entries matching a query across specified layers.
+
+    Uses hybrid search (FTS5 BM25 + sqlite-vec cosine similarity, RRF merged)
+    for optimal recall precision.
 
     Args:
         query: Search text to match against memory content.
@@ -69,98 +72,46 @@ def recall(query: str, layers: str = "L3,L4", top_k: int = 5) -> str:
             resp.raise_for_status()
             return _json(resp.json(), indent=2)
         except Exception as e:
-            return _json({"error": f"Backend unavailable: {e}", "fallback": "using filesystem"})
+            return _json({"error": f"Backend unavailable: {e}"})
 
-    # ── File-based fallback ──────────────────────────────────────
-    query_lower = query.lower()
     target_layers = [l.strip().upper() for l in layers.split(",")]
-    results: list[dict[str, Any]] = []
-
-    for layer in target_layers:
-        if layer == "L3":
-            search_dirs = [MEMORY_ROOT / "timeline"]
-        elif layer == "L4":
-            search_dirs = [MEMORY_ROOT / "facts"]
-        elif layer == "L5":
-            search_dirs = [MEMORY_ROOT / "goals"]
-        elif layer == "L6":
-            search_dirs = [MEMORY_ROOT / "decisions"]
-        else:
-            continue
-
-        for sdir in search_dirs:
-            if not sdir.exists():
-                continue
-            for fpath in sdir.rglob("*"):
-                if not fpath.is_file() or fpath.suffix not in (".md", ".yaml", ".yml", ".txt", ".json"):
-                    continue
-                try:
-                    content = fpath.read_text(encoding="utf-8", errors="replace")
-                except Exception:
-                    continue
-                if query_lower in content.lower():
-                    # Find matching lines as snippet
-                    lines = content.splitlines()
-                    snippet_lines = [ln for ln in lines if query_lower in ln.lower()]
-                    snippet = "\n".join(snippet_lines[:5]) if snippet_lines else content[:300]
-                    results.append({
-                        "layer": layer,
-                        "file": str(fpath.relative_to(MEMORY_ROOT) if fpath.is_relative_to(MEMORY_ROOT) else fpath),
-                        "score": round(1.0 - (len(results) * 0.01), 3),
-                        "snippet": snippet[:500],
-                    })
-                    if len(results) >= top_k:
-                        break
-            if len(results) >= top_k:
-                break
+    store = _store_singleton()
+    results = store.recall(query, layers=target_layers, top_k=top_k, mode="hybrid")
 
     if not results:
         return _json({"query": query, "layers": target_layers, "count": 0, "results": []})
-    return _json({"query": query, "layers": target_layers, "count": len(results), "results": results}, indent=2)
+    return _json({
+        "query": query,
+        "layers": target_layers,
+        "count": len(results),
+        "results": results,
+    }, indent=2)
 
 
 @mcp.tool()
 def health() -> str:
     """Return system health status as JSON."""
-    checks: dict[str, Any] = {}
-
-    root_ok = MEMORY_ROOT.exists()
-    checks["memory_root"] = {"path": str(MEMORY_ROOT), "exists": root_ok}
-
-    if root_ok:
-        checks["sessions"] = {"count": _count_files(MEMORY_ROOT / "sessions", "*.md")}
-        checks["rules"] = {"count": _count_files(MEMORY_ROOT / "hardening", "*.yaml") + _count_files(MEMORY_ROOT / "hardening", "*.yml")}
-        checks["candidates"] = {"count": _count_files(MEMORY_ROOT / "hardening" / "candidates", "*.yaml")}
-        checks["timeline"] = {"entries": _count_files(MEMORY_ROOT / "timeline", "*.md")}
-        checks["decisions"] = {"count": _count_files(MEMORY_ROOT / "decisions", "*.md")}
-        checks["facts"] = {"count": _count_files(MEMORY_ROOT / "facts", "*.md")}
-        checks["goals"] = {"count": len(list((MEMORY_ROOT / "goals").glob("*.yaml"))) if (MEMORY_ROOT / "goals").exists() else 0}
-
-    status = "ok" if root_ok else "degraded"
-    return _json({"status": status, "checks": checks}, indent=2)
+    store = _store_singleton()
+    h = store.health()
+    stats = store.memory_stats()
+    return _json({
+        "status": h["status"],
+        "db_path": h["db_path"],
+        "db_size": h["db_size"],
+        "embedding_available": h["embedding_available"],
+        "stats": stats,
+    }, indent=2)
 
 
 @mcp.tool()
 def list_sessions(recent: int = 5) -> str:
-    """List recent agent session files from the memory system.
+    """List recent agent session records.
 
     Args:
         recent: Number of most recent sessions to return.
     """
-    sessions_dir = MEMORY_ROOT / "sessions"
-    if not sessions_dir.exists():
-        return _json({"count": 0, "sessions": []})
-
-    files = sorted(sessions_dir.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)[:recent]
-    sessions = []
-    for f in files:
-        content = _read_file(f)
-        sessions.append({
-            "filename": f.name,
-            "file_size": f.stat().st_size,
-            "modified_at": datetime.fromtimestamp(f.stat().st_mtime, tz=timezone.utc).isoformat(),
-            "preview": content[:300],
-        })
+    store = _store_singleton()
+    sessions = store.list_sessions(recent)
     return _json({"count": len(sessions), "sessions": sessions}, indent=2)
 
 
@@ -173,56 +124,98 @@ def record_session(agent_name: str, status: str = "active", summary: str = "") -
         status: Session status (active, completed, failed).
         summary: Optional summary of session activity.
     """
-    sessions_dir = MEMORY_ROOT / "sessions"
-    sessions_dir.mkdir(parents=True, exist_ok=True)
+    store = _store_singleton()
+    session_id = store.record_session(agent_name, status, summary)
+    _mirror.on_session_recorded(agent_name, summary, session_id)
     ts = datetime.now(timezone.utc)
-    filename = f"SESSION-{ts.strftime('%Y%m%dT%H%M%SZ')}-{agent_name}.md"
-    lines = [
-        f"# Session: {agent_name}",
-        f"- timestamp: {ts.isoformat()}",
-        f"- agent: {agent_name}",
-        f"- status: {status}",
-    ]
-    if summary:
-        lines.append(f"- summary: {summary}")
-    (sessions_dir / filename).write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return _json({"filename": filename, "agent": agent_name, "status": status, "timestamp": ts.isoformat()})
+    return _json({
+        "session_id": session_id,
+        "agent": agent_name,
+        "status": status,
+        "timestamp": ts.isoformat(),
+    })
 
 
 @mcp.tool()
 def list_rules() -> str:
     """List hardening rules from the memory system."""
-    for path_candidate in [
-        MEMORY_ROOT / "hardening" / "rules.yaml",
-        MEMORY_ROOT / "hardening" / "rules.yml",
-    ]:
-        if path_candidate.exists():
-            import yaml
-            try:
-                data = yaml.safe_load(_read_file(path_candidate))
-                rules = data.get("rules", []) if isinstance(data, dict) else []
-                return _json({"count": len(rules), "source": str(path_candidate), "rules": rules}, indent=2, ensure_ascii=False)
-            except Exception as e:
-                return _json({"error": f"Failed to parse rules: {e}"})
-    return _json({"count": 0, "rules": [], "note": "No rules.yaml found"})
+    store = _store_singleton()
+    rules = store.list_rules()
+    return _json({"count": len(rules), "rules": rules}, indent=2, ensure_ascii=False)
 
 
 @mcp.tool()
 def memory_stats() -> str:
     """Return aggregate statistics about the memory system."""
-    if not MEMORY_ROOT.exists():
-        return _json({"error": f"Memory root not found: {MEMORY_ROOT}"})
-    return _json({
-        "sessions": _count_files(MEMORY_ROOT / "sessions", "*.md"),
-        "rules": _count_files(MEMORY_ROOT / "hardening", "*.yaml"),
-        "candidates": _count_files(MEMORY_ROOT / "hardening" / "candidates", "*.yaml"),
-        "timeline_entries": _count_files(MEMORY_ROOT / "timeline", "*.md"),
-        "decisions": _count_files(MEMORY_ROOT / "decisions", "*.md"),
-        "facts": _count_files(MEMORY_ROOT / "facts", "*.md"),
-        "goals": _count_files(MEMORY_ROOT / "goals", "*.yaml"),
-        "profiles": _count_files(MEMORY_ROOT / "profiles", "*.md"),
-        "total_files": _count_files(MEMORY_ROOT, "*"),
-    }, indent=2)
+    store = _store_singleton()
+    stats = store.memory_stats()
+    return _json(stats, indent=2)
+
+
+@mcp.tool()
+def save_memory(layer: str, content: str, metadata_json: str = "{}") -> str:
+    """Save a memory entry into the SQLite store.
+
+    Args:
+        layer: Layer identifier — L3 (temporal), L4 (facts), L5 (goals), L6 (decisions).
+        content: The memory content text.
+        metadata_json: Optional JSON string with metadata fields.
+
+    Returns:
+        JSON with id and layer of the saved memory.
+    """
+    metadata = json.loads(metadata_json) if isinstance(metadata_json, str) else metadata_json
+    store = _store_singleton()
+    mem_id = store.save_memory(layer, content, metadata)
+    _mirror.on_memory_saved(layer, content, metadata, mem_id)
+    return _json({"id": mem_id, "layer": layer})
+
+
+@mcp.tool()
+def graph_search(query: str, top_k: int = 5) -> str:
+    """Search the knowledge graph (L2) for people, skills, and relationships.
+
+    Uses recursive CTEs for relationship traversal across the graph.
+    Results include direct connections and relationship types.
+
+    Args:
+        query: Person name, skill name, or keyword to search for.
+        top_k: Maximum results to return.
+
+    Returns:
+        JSON with matched graph nodes and their relationships.
+    """
+    store = _store_singleton()
+    results = store.query_graph(query, top_k)
+    return _json({"query": query, "count": len(results), "results": results}, indent=2)
+
+
+@mcp.tool()
+def save_rule(
+    rule_id: str,
+    trigger: str,
+    pattern: str,
+    corrective: str,
+    level: str = "soft",
+    source_decision_id: str = "",
+) -> str:
+    """Save a hardening rule (L0) into the memory system.
+
+    Args:
+        rule_id: Unique identifier for the rule.
+        trigger: Condition that triggers this rule.
+        pattern: The behavioral pattern to detect.
+        corrective: The corrective action to apply.
+        level: Rule level — soft (guideline) or hard (enforced).
+        source_decision_id: Optional reference to the originating L6 decision.
+
+    Returns:
+        JSON with the saved rule details.
+    """
+    store = _store_singleton()
+    rule = store.save_rule(rule_id, trigger, pattern, corrective, level, source_decision_id)
+    _mirror.on_rules_changed(store.list_rules())
+    return _json(rule, indent=2)
 
 
 # ── On-Demand Layer Guides ───────────────────────────────────────

@@ -7,6 +7,12 @@
       "extraPaths": [
         ".venv/Lib/site-packages"
       ]
+    },
+    {
+      "root": "storage",
+      "extraPaths": [
+        ".venv/Lib/site-packages"
+      ]
     }
   ],
   "typeCheckingMode": "basic",
@@ -21,6 +27,7 @@
   "reportCallInDefaultInitializer": false,
   "reportExplicitAny": false,
   "include": [
-    "api"
+    "api",
+    "storage"
   ]
 }
